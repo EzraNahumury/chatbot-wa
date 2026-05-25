@@ -10,9 +10,20 @@ const DESIGN_SPECIFIC_REPLY =
   "Kalau contoh yang spesifik nanti admin akan menghubungi lagi ya kak. Mungkin bisa lihat contoh hasil design juga di link IG kami: " +
   JERSEY_DESIGN_IG_LINK;
 const EXPRESS_REPLY =
-  "Untuk paket express tersedia opsi 1 hari (+Rp75.000), 3 hari (+Rp50.000), 5 hari (+Rp30.000), dan 7 hari (+Rp15.000) ya kak. " +
-  "Note: penerimaan express menyesuaikan load produksi, jadi tidak semua request express bisa kami terima. " +
-  "Nanti admin akan bantu cek dulu ke bagian produksi ya.";
+  "Untuk paket express, tersedia beberapa opsi dengan tambahan biaya per pcs ya kak 😊\n\n" +
+  "• Express 1 Hari — Logo printing, pola standar: +Rp75.000/pcs\n" +
+  "• Express 3 Hari — Logo 3D tatami, pola standar: +Rp50.000/pcs\n" +
+  "• Express 5 Hari — Logo 3D tatami, pecah pola*: +Rp30.000/pcs\n" +
+  "• Express 7 Hari — Logo 3D tatami, pecah pola*: +Rp15.000/pcs\n" +
+  "• Express 10-12 Hari — Logo 3D tatami, pecah pola*: +Rp10.000/pcs\n" +
+  "*Pecah pola berlaku untuk paket Classic & Pro\n\n" +
+  "*Penawaran diskon volume khusus Express 5 hari ke atas:*\n" +
+  "- Order 30-49 pcs: diskon 50% biaya express\n" +
+  "- Order 50 pcs ke atas: FREE biaya express 🎉\n" +
+  "(Express 1 & 3 hari kuotanya hanya 20 pcs/hari, jadi biaya express tetap penuh ya kak)\n\n" +
+  "Ketentuan: order harus masuk sebelum 12.00 WIB dengan kondisi full payment, fix design, dan data lengkap. Di atas jam 12.00 ikut kuota hari berikutnya ya.\n\n" +
+  "Note: penerimaan express tetap menyesuaikan load produksi, jadi tidak semua request bisa langsung diterima. Nanti admin bantu cek dulu ke produksi ya kak 🙏\n\n" +
+  "Kira-kira kakak butuh selesai dalam berapa hari?";
 
 // Rule-based commands checked BEFORE sending to AI
 // Returns { handled: true, reply: string }
@@ -85,6 +96,22 @@ const BUKTI_TF_REPLY =
   "Promo yg diambil (s&k berlaku) : \n\n" +
   "Note untuk admin (pattern lab) : \n\n" +
   "Setelah form dilengkapi & finance konfirmasi pembayaran, tim desain kami langsung mulai proses ya 😊";
+
+// Greeting variants — anti-template, pick random. Promo slot via PROMO_TAGLINE env.
+const GREETING_VARIANTS = [
+  "Halo kak 👋 saya Nadia dari CS Ayres.{promo} Kira-kira ada kebutuhan apa yang bisa saya bantu hari ini?",
+  "Halo kak, saya Nadia CS Ayres 😊{promo} Lagi cari jersey custom atau ada yang ingin ditanyakan dulu?",
+  "Hai kak, Nadia dari Ayres Apparel di sini 🙏{promo} Boleh tahu ada keperluan apa yang bisa kami bantu?",
+  "Halo kak 😊 saya Nadia CS Ayres.{promo} Mau bikin jersey untuk tim atau ada info produk yang ingin ditanyakan dulu?",
+];
+
+function buildGreetingReply() {
+  const variant =
+    GREETING_VARIANTS[Math.floor(Math.random() * GREETING_VARIANTS.length)];
+  const raw = (process.env.PROMO_TAGLINE || "").trim();
+  const promo = raw ? ` ${raw}` : "";
+  return variant.replace("{promo}", promo);
+}
 
 function setAwaitingBuktiTf(phone) {
   awaitingBuktiTfState.set(phone, Date.now());
@@ -362,10 +389,7 @@ function handleCommand(phone, text) {
   ) {
     return {
       handled: true,
-      reply:
-        "Perkenalkan, saya *Nadia*, AI asisten CS yang akan membantu kakak ketika CS tidak berada di jam kerja 😊\n\n" +
-        "Halo kak! Selamat datang di Ayres Apparel 👋\n\n" +
-        "Ada yang bisa saya bantu? Mau bikin jersey untuk apa atau butuh info produk dulu?",
+      reply: buildGreetingReply(),
     };
   }
 
@@ -412,23 +436,12 @@ function handleCommand(phone, text) {
     "jadi pesan",
   ];
   if (orderIntentKeywords.some((k) => lower.includes(k))) {
+    // Order intent terdeteksi — clear state lalu serahkan ke AI supaya gali
+    // kebutuhan customer secara natural (bertahap, sesuai konteks), bukan
+    // dengan dumping form 9 poin.
     clearKatalogState(phone);
     clearPricelistJerseyState(phone);
-    return {
-      handled: true,
-      reply:
-        "Siap kak! Biar kami bantu susun ordernya, boleh info dulu beberapa hal berikut ya 😊\n\n" +
-        "1. Jersey untuk olahraga apa atau keperluan apa? (bola, futsal, volley, kelas, komunitas, dll.)\n" +
-        "2. Qty yang dibutuhkan?\n" +
-        "3. Mau atasan saja, setelan full-print, atau setelan dengan celana polyflex?\n" +
-        "4. Sudah punya desain atau mau pakai katalog / bantu desain dari kami?\n" +
-        "5. Bahan / tier yang diinginkan? (Standard, Classic, Pro, atau ada fitur khusus seperti UV-Protective, Silvertech, dsb.)\n" +
-        "6. Perlu custom nama, nomor, logo atau sponsor?\n" +
-        "7. Ukuran (dewasa, kids, big size, atau boxy)?\n" +
-        "8. Deadline pemakaian atau tanggal berapa jersey harus selesai?\n" +
-        "9. Alamat pengiriman (kota) dan ekspedisi pilihan?\n\n" +
-        "Kasih tahu ya, nanti kami hitungkan harganya dan berikan estimasi produksi. 🙏",
-    };
+    return { handled: false };
   }
 
   // ── Pricelist Jersey: step 2 — user sedang memilih paket ─────────────────────
