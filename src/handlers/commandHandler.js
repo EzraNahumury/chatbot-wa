@@ -778,6 +778,42 @@ function handleCommand(phone, text) {
     };
   }
 
+  // ── Pattern Lab: explanation + pancingan untuk lihat gambar pola ─────────────
+  // Reuse state `awaiting_katalog` agar customer next reply (nama pola) langsung
+  // dilayani oleh handler katalog di atas.
+  const patternLabKeywords = [
+    "pattern lab",
+    "patternlab",
+    "pola jersey",
+    "pilihan pola",
+    "katalog pola",
+    "pola tim",
+    "pola desain",
+    "tipe pola",
+  ];
+
+  if (!isOrderContextGlobal && patternLabKeywords.some((k) => lower.includes(k))) {
+    katalogState.set(phone, "awaiting_katalog");
+    return {
+      handled: true,
+      reply:
+        "Halo kak, mohon izin kami informasikan ya kak 🙏\n\n" +
+        "Untuk pilihan pola jersey Ayres, kami menyediakan beberapa tipe pola yang bisa disesuaikan dengan karakter dan kebutuhan tim kakak. Setiap pola punya karakter tampilan yang berbeda — dari yang terlihat cepat, rapi, profesional, gagah, sampai memberi kesan kuat di lapangan.\n\n" +
+        "*Pilihan pola yang tersedia:*\n\n" +
+        "1️⃣ *Cakra Vega* — Classic Package\n" +
+        "Cocok untuk tim yang ingin terlihat cepat, agresif, dan dinamis sejak awal laga.\n\n" +
+        "2️⃣ *Adi Vira* — Classic Package\n" +
+        "Cocok untuk tim yang ingin tampil lebih rapi, simple, dan profesional.\n\n" +
+        "3️⃣ *Garuda Vastra* — Pro Package\n" +
+        "Cocok untuk tim yang ingin terlihat lebih gagah, elegan, dan berbeda dari tim lain.\n\n" +
+        "4️⃣ *Bima Sena* — Pro Package\n" +
+        "Cocok untuk tim yang ingin memberi kesan kuat, solid, dan sulit ditaklukkan.\n\n" +
+        "Pilihan pola ini jadi dasar bentuk panel, potongan, dan karakter desain jersey. Sedangkan warna, logo, sponsor, nama, nomor, dan detail identitas tim tetap akan disesuaikan pada tahap desain/proofing 🙏\n\n" +
+        "_Catatan: setelah pola dipilih dan desain masuk tahap ACC proofing, pola dan data dianggap fix agar produksi berjalan aman sesuai timeline. Kalau ada perubahan pola/desain setelah ACC proofing, akan dilakukan penyesuaian ulang karena berpengaruh ke timeline produksi._\n\n" +
+        "Mau lihat gambar polanya yang mana dulu kak? Ketik *Cakra Vega*, *Adi Vira*, *Garuda Vastra*, atau *Bima Sena* ya 😊",
+    };
+  }
+
   // ── Katalog: step 1 — user minta katalog ─────────────────────────────────────
   const katalogKeywords = [
     "katalog",

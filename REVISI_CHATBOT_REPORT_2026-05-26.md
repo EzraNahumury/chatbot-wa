@@ -2,7 +2,7 @@
 
 **Tanggal:** 26 Mei 2026
 **Branch:** `main`
-**Commits:** `aa89652`, `4b0ddca`, `77333f4`, `fd2b3de`, (+ commit deadline lock terbaru)
+**Commits:** `aa89652`, `4b0ddca`, `77333f4`, `fd2b3de`, `4c42567`, (+ commit pattern lab terbaru)
 **Status:** Sudah di-push ke `origin/main`, Railway auto-deploy aktif
 **Author:** Ezra Kristanto Nahumury (dibantu Claude Code)
 
@@ -10,7 +10,7 @@
 
 ## 1. Ringkasan Eksekutif
 
-Sesi revisi hari ini menyelesaikan **13 item perubahan** terhadap chatbot WhatsApp Ayres Apparel. Cakupan revisi mencakup empat bidang utama:
+Sesi revisi hari ini menyelesaikan **14 item perubahan** terhadap chatbot WhatsApp Ayres Apparel. Cakupan revisi mencakup empat bidang utama:
 
 1. **Persona & komunikasi** — penyegaran greeting, aturan penutup chat, anti-template, dan penghapusan dump form 9-poin.
 2. **Data referensi & sales aid** — tabel tarif ongkir per provinsi (JNE JTR), penyempurnaan skema paket express + diskon volume, rule urgency closing, dan dokumentasi Deadline Lock + program kompensasi keterlambatan.
@@ -21,7 +21,7 @@ Total file yang dimodifikasi: **5 file inti** (`src/ai/prompt.js`, `src/handlers
 
 ---
 
-## 2. Tabel Ringkasan 13 Revisi
+## 2. Tabel Ringkasan 14 Revisi
 
 | # | Item | File Diubah | Status |
 |---|------|-------------|--------|
@@ -38,6 +38,7 @@ Total file yang dimodifikasi: **5 file inti** (`src/ai/prompt.js`, `src/handlers
 | 11 | Rating chatbot 1-5 + log evaluasi (`ratings.jsonl`) | `commandHandler.js` | ✅ Selesai |
 | 12 | Urgency hook (gating ketat, momen tepat) | `prompt.js` | ✅ Selesai |
 | 13 | Deadline Lock + Kompensasi Keterlambatan (jaminan + 4 tier kompensasi) | `knowledge-base.json`, `prompt.js` | ✅ Selesai |
+| 14 | Pattern Lab handler (penjelasan 4 pola + pancingan lihat gambar katalog) | `commandHandler.js`, `knowledge-base.json`, `prompt.js` | ✅ Selesai |
 
 ---
 
@@ -338,6 +339,73 @@ Bot:
 > Catatan: kompensasi ini tidak berlaku kalau ada penambahan/perubahan data setelah ACC proofing, karena timeline otomatis menyesuaikan kembali.
 >
 > Kira-kira acara komunitas kakak tanggal berapa ya? Biar bisa saya bantu cek apakah masuk estimasi normal atau perlu express.
+
+---
+
+### 3.14 Pattern Lab Handler
+
+**Masalah sebelumnya:**
+- "Pattern lab" disebut di knowledge base sekilas (*"ditawarkan pattern lab"*) tanpa definisi & tanpa pancingan ke gambar.
+- AI tidak tahu apa itu pattern lab → kalau customer tanya, AI berpotensi ngarang atau menjawab dengan "saya bantu konfirmasi ke admin".
+- Folder gambar `gambar/katalog/` sudah punya 4 pola jersey (Cakra Vega, Adi Vira, Garuda Vastra, Bima Sena) tapi tidak ada entry point keyword khusus "pattern lab".
+
+**Perubahan:**
+
+**1. Handler baru di `src/handlers/commandHandler.js`** (sebelum block katalog generic):
+- Keywords trigger: `pattern lab`, `patternlab`, `pola jersey`, `pilihan pola`, `katalog pola`, `pola tim`, `pola desain`, `tipe pola`.
+- Reply: penjelasan 4 pilihan pola lengkap dengan karakter masing-masing + catatan finalisasi pasca-ACC proofing + pancingan ketik nama pola untuk lihat gambarnya.
+- State: reuse `katalogState = 'awaiting_katalog'` — turn berikutnya customer ketik nama pola (Cakra Vega / Adi Vira / dll) → existing handler katalog langsung kirim image dari folder `gambar/katalog/`.
+
+**2. Update KB `knowledge-base.json`:**
+- Section "Syarat Data untuk Proses Desain" — entry `Pattern lab bisa ditawarkan sebagai referensi pola` di-extend dengan definisi lengkap + list 4 pola + karakter masing-masing + note bahwa bot bisa kirim gambar via keyword.
+
+**3. Update rule `src/ai/prompt.js`:**
+- Rule existing tentang "minta gambar/katalog/size chart" di-extend untuk include pattern lab / pola jersey.
+- Tambah rule penjelasan: pattern lab = kumpulan tipe pola jersey Ayres dengan 4 karakter (cepat/dinamis, rapi/profesional, gagah/elegan, kuat/solid) — warna/logo/sponsor/nama/nomor tetap dikustom di tahap desain.
+- AI WAJIB arahkan customer ke keyword `pattern lab` / `pola jersey` (handler sistem yang kirim penjelasan + setup pancingan gambar). AI **dilarang** ngarang detail karakter pola sendiri.
+
+**Karakter 4 pola yang resmi:**
+
+| Pola | Paket | Karakter |
+|------|-------|----------|
+| Cakra Vega | Classic | Cepat, agresif, dinamis sejak awal laga |
+| Adi Vira | Classic | Rapi, simple, profesional |
+| Garuda Vastra | Pro | Gagah, elegan, berbeda dari tim lain |
+| Bima Sena | Pro | Kuat, solid, sulit ditaklukkan |
+
+**Behavior baru:**
+
+Customer kirim `pattern lab` → bot reply penjelasan lengkap 4 pola + karakter + catatan ACC proofing + pancingan ketik nama pola.
+Customer kirim `Cakra Vega` → bot kirim image dari `gambar/katalog/katalog classic Cakra Vega/`.
+
+**Contoh prediksi:**
+
+```
+Customer: pattern lab kak
+
+Bot:      Halo kak, mohon izin kami informasikan ya kak 🙏
+
+          Untuk pilihan pola jersey Ayres, kami menyediakan beberapa tipe pola
+          yang bisa disesuaikan dengan karakter dan kebutuhan tim kakak.
+          Setiap pola punya karakter tampilan yang berbeda — dari yang
+          terlihat cepat, rapi, profesional, gagah, sampai memberi kesan kuat
+          di lapangan.
+
+          Pilihan pola yang tersedia:
+          1️⃣ Cakra Vega — Classic Package
+             Cocok untuk tim yang ingin terlihat cepat, agresif, dan dinamis...
+          2️⃣ Adi Vira — Classic Package
+             Cocok untuk tim yang ingin tampil lebih rapi, simple...
+          3️⃣ Garuda Vastra — Pro Package
+             Cocok untuk tim yang ingin terlihat lebih gagah, elegan...
+          4️⃣ Bima Sena — Pro Package
+             Cocok untuk tim yang ingin memberi kesan kuat, solid...
+
+          [...catatan pasca-ACC...]
+
+          Mau lihat gambar polanya yang mana dulu kak? Ketik Cakra Vega,
+          Adi Vira, Garuda Vastra, atau Bima Sena ya 😊
+```
 
 ---
 
@@ -664,7 +732,8 @@ Bot:      Untuk 50 pcs dengan deadline 1 minggu masuk ke Express 5 atau 7
 | `4b0ddca` | 26 Mei 2026 | Post-TF flow, rating, nego CS Senior, urgency rule |
 | `77333f4` | 26 Mei 2026 | Laporan revisi (file ini) |
 | `fd2b3de` | 26 Mei 2026 | Fix mermaid render error (inner quotes & unicode arrows) |
-| (HEAD baru) | 26 Mei 2026 | Deadline Lock & Kompensasi Keterlambatan (revisi #13) + update laporan |
+| `4c42567` | 26 Mei 2026 | Deadline Lock & Kompensasi Keterlambatan (revisi #13) + update laporan |
+| (HEAD baru) | 26 Mei 2026 | Pattern Lab handler (revisi #14) + update laporan |
 
 ---
 
