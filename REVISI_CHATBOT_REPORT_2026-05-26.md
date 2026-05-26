@@ -286,7 +286,7 @@ flowchart TD
     C -->|Ya, ada state awaitingBuktiTf| C1[Send BUKTI_TF_REPLY<br/>+ setAwaitingTfForm<br/>+ notify Finance]
     C -->|Ya, tanpa state| C2[Reply admin follow-up]
     C -->|Tidak| D{Rate limited?}
-    D -->|Ya| D1[Reply "tunggu sebentar"]
+    D -->|Ya| D1[Reply tunggu sebentar]
     D -->|Tidak| E[randomDelay]
     E --> F[handleCommand]
     F --> G{handled?}
@@ -327,29 +327,29 @@ sequenceDiagram
     AI->>B: Reply LANGKAH 1 (ketentuan DP)
     B->>C: Kirim ketentuan DP + minta persetujuan
 
-    C->>B: "setuju" / "oke"
+    C->>B: setuju / oke
     B->>AI: Forward
     AI->>B: Reply LANGKAH 2 (rekening BCA + nomor Finance)
     B->>C: Kirim rekening 731-5250889 + finance number
     Note over B: aiHandler detect REKENING_PATTERN<br/>setAwaitingBuktiTf
 
     C->>F: (Manual) chat ke Finance kirim bukti TF
-    C->>B: "sudah tf kak" / kirim image bukti
+    C->>B: sudah tf kak / kirim image bukti
     B->>C: Kirim BUKTI_TF_REPLY (FORM DATA CUSTOMER)
     Note over B: clearAwaitingBuktiTf<br/>setAwaitingTfForm
     B->>F: 💰 Auto-notify Finance (paralel verifikasi)
 
     C->>B: Isi form (Nama, No WA, Alamat, Jumlah TF)
     Note over B: isPostTfFormFilled = true<br/>clearAwaitingTfForm<br/>setAwaitingRating
-    B->>C: Reply "Data diterima" + minta rating 1-5
+    B->>C: Reply Data diterima + minta rating 1-5
     B->>O: 📦 Auto-notify CS Order (+ warning tunggu Finance)
 
     F->>F: Verifikasi BCA
-    F->>O: (Manual) kabari "duit masuk, lanjut"
+    F->>O: (Manual) kabari duit masuk, lanjut
     O->>C: Mulai chat customer untuk proses orderan
 
-    C->>B: "5 bagus banget kak"
-    Note over B: parseRating → rating=5<br/>appendRatingLog<br/>clearAwaitingRating
+    C->>B: 5 bagus banget kak
+    Note over B: parseRating - rating=5<br/>appendRatingLog<br/>clearAwaitingRating
     B->>C: Terima kasih atas rating
 ```
 
@@ -398,7 +398,7 @@ flowchart TD
 flowchart TD
     A[Customer tanya harga / tanya ongkir] --> B{Customer sebut kota / provinsi?}
     B -->|Belum| C[AI kasih harga jersey + tanya provinsi tujuan]
-    B -->|Sudah| D[AI mapping kota → provinsi<br/>Jakarta→DKI, Surabaya→Jatim, dll]
+    B -->|Sudah| D[AI mapping kota ke provinsi<br/>Jakarta=DKI, Surabaya=Jatim, dll]
     D --> E[AI lookup tarif JTR di KB]
     E --> F[AI kasih:<br/>- harga jersey per paket<br/>- estimasi ongkir provinsi<br/>- disclaimer wajib<br/>- pertanyaan kontekstual]
     F --> G{Customer di Yogya/DIY?}
@@ -415,7 +415,7 @@ flowchart TD
 ```mermaid
 stateDiagram-v2
     [*] --> WaitingTF: AI kirim rekening<br/>setAwaitingBuktiTf
-    WaitingTF --> WaitingForm: Customer "sudah tf" / image bukti<br/>setAwaitingTfForm<br/>+ auto-notify Finance
+    WaitingTF --> WaitingForm: Customer sudah tf / image bukti<br/>setAwaitingTfForm<br/>+ auto-notify Finance
     WaitingForm --> WaitingRating: Customer kirim form lengkap<br/>parsePostTfForm<br/>+ auto-notify CS Order<br/>setAwaitingRating
     WaitingRating --> Done: Customer kirim angka 1-5<br/>appendRatingLog<br/>clearAwaitingRating
     WaitingTF --> WaitingTF: Other messages (24h expiry)
