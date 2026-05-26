@@ -846,9 +846,9 @@ function handleCommand(phone, text) {
         "2️⃣ Classic Cakra Vega\n" +
         "3️⃣ Pro Bima Sena\n" +
         "4️⃣ Pro Garuda Vastra\n\n" +
-        "Ketik nama katalog yang ingin kamu lihat ya kak 😊\n\n" +
-        "Untuk katalog design juga boleh cek di Instagram kami ya kak, disitu lengkap 😊\n" +
-        "https://www.instagram.com/ayres.sportswear/",
+        "Untuk koleksi lengkap design juga bisa cek di Instagram kami ya kak 😊\n" +
+        "https://www.instagram.com/ayres.sportswear/\n\n" +
+        "Mau lihat katalog yang mana dulu kak? Ketik nama katalognya ya 🙏",
     };
   }
 
@@ -1097,7 +1097,7 @@ function handleCommand(phone, text) {
         "4️⃣ Warrior Combat\n" +
         "5️⃣ Nusantara\n" +
         "6️⃣ Tambahan\n\n" +
-        "Ketik angka atau nama paket yang ingin kamu lihat ya kak 😊",
+        "Mau lihat pricelist paket yang mana dulu kak? Ketik angka atau nama paketnya ya 😊",
     };
   }
 
