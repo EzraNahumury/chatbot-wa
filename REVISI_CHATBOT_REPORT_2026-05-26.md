@@ -2,7 +2,7 @@
 
 **Tanggal:** 26 Mei 2026
 **Branch:** `main`
-**Commits:** `aa89652`, `4b0ddca`
+**Commits:** `aa89652`, `4b0ddca`, `77333f4`, `fd2b3de`, (+ commit deadline lock terbaru)
 **Status:** Sudah di-push ke `origin/main`, Railway auto-deploy aktif
 **Author:** Ezra Kristanto Nahumury (dibantu Claude Code)
 
@@ -10,23 +10,18 @@
 
 ## 1. Ringkasan Eksekutif
 
-Sesi revisi hari ini menyelesaikan **12 item perubahan** terhadap chatbot WhatsApp Ayres Apparel. Cakupan revisi mencakup empat bidang utama:
+Sesi revisi hari ini menyelesaikan **13 item perubahan** terhadap chatbot WhatsApp Ayres Apparel. Cakupan revisi mencakup empat bidang utama:
 
 1. **Persona & komunikasi** — penyegaran greeting, aturan penutup chat, anti-template, dan penghapusan dump form 9-poin.
-2. **Data referensi & sales aid** — tabel tarif ongkir per provinsi (JNE JTR), penyempurnaan skema paket express + diskon volume, dan rule urgency closing.
+2. **Data referensi & sales aid** — tabel tarif ongkir per provinsi (JNE JTR), penyempurnaan skema paket express + diskon volume, rule urgency closing, dan dokumentasi Deadline Lock + program kompensasi keterlambatan.
 3. **Eskalasi & multi-channel handover** — handling nego harga di luar ketentuan, handling permintaan promo yang belum ada, dan eskalasi otomatis ke CS Senior.
 4. **Flow post-pembayaran** — form data customer setelah bukti TF, paralel notify ke Finance, forward otomatis ke CS Order, dan capture rating chatbot.
 
 Total file yang dimodifikasi: **5 file inti** (`src/ai/prompt.js`, `src/handlers/commandHandler.js`, `src/handlers/aiHandler.js`, `src/core/router.js`, `knowledge-base.json`) + **2 file dokumentasi & aset baru** (`REVISI_CHATBOT_MEETING_2026-05-25.md`, `gambar/express/`).
 
-Statistik gabungan dua commit:
-- Commit `aa89652`: 5 file, +284 / -35
-- Commit `4b0ddca`: 4 file, +390 / -43
-- **Total: ~+674 baris / -78 baris**
-
 ---
 
-## 2. Tabel Ringkasan 12 Revisi
+## 2. Tabel Ringkasan 13 Revisi
 
 | # | Item | File Diubah | Status |
 |---|------|-------------|--------|
@@ -42,6 +37,7 @@ Statistik gabungan dua commit:
 | 10 | Auto-forward data ke CS Order + warning tunggu Finance | `commandHandler.js`, `router.js` | ✅ Selesai |
 | 11 | Rating chatbot 1-5 + log evaluasi (`ratings.jsonl`) | `commandHandler.js` | ✅ Selesai |
 | 12 | Urgency hook (gating ketat, momen tepat) | `prompt.js` | ✅ Selesai |
+| 13 | Deadline Lock + Kompensasi Keterlambatan (jaminan + 4 tier kompensasi) | `knowledge-base.json`, `prompt.js` | ✅ Selesai |
 
 ---
 
@@ -271,6 +267,77 @@ Bot:      Siap kak 😊 boleh tahu untuk olahraga apa dan kira-kira berapa pcs y
   - (d) Ajakan diskusi konsultatif (desain/qty/budget)
 - LARANGAN ngarang angka palsu ("tinggal 3 slot") — pakai frasa umum.
 - Few-shot 3-turn sequence disertakan di prompt sebagai contoh momentum yang tepat.
+
+---
+
+### 3.13 Deadline Lock & Kompensasi Keterlambatan
+
+**Masalah sebelumnya:**
+- Konsep "Deadline Lock" tidak ada di KB — AI tidak bisa menjelaskan kapan timeline produksi terkunci dan apa konsekuensi penambahan/perubahan data setelah ACC proofing.
+- Program kompensasi keterlambatan sebelumnya hanya disebut sekilas (*"detail kompensasi perlu konfirmasi admin"*). Tidak ada tier kompensasi konkret di KB.
+- Customer tidak punya kepastian soal jadwal produksi → potensi ragu order, atau komplain pasca produksi akibat ekspektasi yang tidak align.
+
+**Perubahan:**
+
+**Section baru di `knowledge-base.json`** (sebelum `## Pengiriman`):
+
+1. **`## Deadline Lock (Penguncian Jadwal Produksi)`**
+   - Waktu normal produksi = **21 hari kerja** (Minggu & tanggal merah tidak dihitung).
+   - Perhitungan 21 hari kerja BARU dimulai setelah **3 syarat** terpenuhi:
+     1. DP produksi sudah masuk
+     2. Proofing hasil cetak di kain sudah ACC oleh customer
+     3. Data tim sudah fix (size, nama, nomor, sponsor, dll)
+   - Setelah 3 syarat → pesanan masuk antrian + **deadline dikunci (deadline lock)**.
+   - **Konsekuensi setelah ACC PROOFING:**
+     - Penambahan / perubahan data (qty, size, nama/nomor, dll) **tidak bisa digabungkan** ke produksi yang sedang berjalan.
+     - Kalau ada kebutuhan tambahan → diproses sebagai **order baru** dengan timeline dihitung dari awal.
+     - **Kompensasi keterlambatan TIDAK BERLAKU** kalau penambahan/perubahan terjadi setelah ACC proofing (timeline otomatis menyesuaikan).
+
+2. **`## Kompensasi Keterlambatan Produksi`**
+   - Komitmen Ayres: kalau terjadi keterlambatan produksi (di luar kondisi penambahan/perubahan data customer pasca ACC), Ayres berikan kompensasi resmi.
+   - Positioning eksplisit: program ini adalah **bentuk JAMINAN**, bukan karena Ayres sering telat — sistem produksi dirancang agar timeline aman.
+   - **Tier kompensasi:**
+
+     | Durasi Keterlambatan | Kompensasi |
+     |----------------------|------------|
+     | 1-7 hari | 1 Bola Ayres |
+     | 8-14 hari | Kaos kaki Ayres 1 lusin |
+     | 15-30 hari | Kaos kaki Ayres 2 lusin |
+     | > 30 hari | Kaos kaki Ayres 2 lusin + 1 Bola Ayres |
+
+   - Catatan: kompensasi tidak berlaku kalau penyebab keterlambatan = penambahan/perubahan data customer setelah ACC.
+
+**Rule baru di `src/ai/prompt.js`** (sebelum rule express):
+- Trigger AI: customer tanya deadline / estimasi waktu / alur produksi / khawatir soal jadwal.
+- AI wajib jelaskan: (1) waktu normal 21 hari kerja, (2) perhitungan mulai setelah 3 syarat, (3) deadline lock + konsekuensi setelah ACC, (4) program kompensasi 4 tier.
+- AI wajib tekankan ini = **bentuk JAMINAN/KEPERCAYAAN Ayres**, bukan karena sering telat.
+- AI wajib sebut catatan: kompensasi tidak berlaku kalau penambahan/perubahan data setelah ACC.
+- AI wajib akhiri pertanyaan kontekstual (mis. "Kira-kira deadline kakak ada di tanggal berapa kak?" atau "Apakah ada kebutuhan timeline khusus untuk event tertentu kak?").
+- Eksplisit ditandai di prompt sebagai **POIN PEMASARAN PENTING** untuk membangun kepercayaan customer yang ragu soal jadwal.
+
+**Manfaat operasional:**
+- **Mengurangi komplain pasca-produksi** terkait perubahan data — customer sudah tahu di awal bahwa data harus fix sebelum ACC.
+- **Sales aid** — customer ragu soal jadwal dapat re-assurance konkret (tier kompensasi yang spesifik = signal keyakinan internal).
+- **Trust-builder yang terukur** — bukan klaim kosong "produksi tepat waktu", tapi dengan komitmen kompensasi terdokumentasi.
+
+**Contoh prediksi behavior:**
+
+Customer: *"Kalau telat gimana kak? Saya butuh tepat waktu buat acara komunitas."*
+
+Bot:
+> Tenang kak 😊 Waktu normal produksi Ayres 21 hari kerja, dan kami punya sistem deadline lock — jadi setelah DP produksi masuk, ACC proofing, dan data tim fix, pesanan langsung masuk antrian dan deadline kami kunci 🙏
+>
+> Sebagai bentuk komitmen, kalau sampai terjadi keterlambatan dari sisi kami, ada program kompensasi resmi ya kak:
+> • Terlambat 1-7 hari → 1 Bola Ayres
+> • 8-14 hari → 1 lusin Kaos Kaki Ayres
+> • 15-30 hari → 2 lusin Kaos Kaki
+> • >30 hari → 2 lusin Kaos Kaki + Bola Ayres
+>
+> Program ini bukan karena kami sering telat ya kak, justru karena kami yakin dengan sistem produksi dan ingin customer 100% aman 🙏
+>
+> Catatan: kompensasi ini tidak berlaku kalau ada penambahan/perubahan data setelah ACC proofing, karena timeline otomatis menyesuaikan kembali.
+>
+> Kira-kira acara komunitas kakak tanggal berapa ya? Biar bisa saya bantu cek apakah masuk estimasi normal atau perlu express.
 
 ---
 
@@ -595,6 +662,9 @@ Bot:      Untuk 50 pcs dengan deadline 1 minggu masuk ke Express 5 atau 7
 | `eb5e25e` | Sebelum sesi | Baseline lama |
 | `aa89652` | 26 Mei 2026 | Greeting, closing rule, ongkir, express, nego, promo |
 | `4b0ddca` | 26 Mei 2026 | Post-TF flow, rating, nego CS Senior, urgency rule |
+| `77333f4` | 26 Mei 2026 | Laporan revisi (file ini) |
+| `fd2b3de` | 26 Mei 2026 | Fix mermaid render error (inner quotes & unicode arrows) |
+| (HEAD baru) | 26 Mei 2026 | Deadline Lock & Kompensasi Keterlambatan (revisi #13) + update laporan |
 
 ---
 
