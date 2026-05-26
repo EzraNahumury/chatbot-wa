@@ -1,5 +1,5 @@
 const { askAI } = require("../ai/ollama");
-const { setAwaitingBuktiTf } = require("./commandHandler");
+const { setAwaitingBuktiTf, CS_SENIOR_JID } = require("./commandHandler");
 const { logger, maskPhone } = require("../utils/logger");
 const path = require("path");
 const fs = require("fs");
@@ -9,6 +9,10 @@ const GAMBAR_DIR = path.join(__dirname, "../../gambar");
 // Pattern untuk mendeteksi kalau AI sudah mengirim rekening DP desain.
 // Pakai nomor rekening atau nama CV — keduanya unik dan susah false-positive.
 const REKENING_PATTERN = /(731[-\s]?5250889|ayres\s*sportindo)/i;
+
+// Pattern untuk mendeteksi escalation nego ke CS Senior. AI di prompt diinstruksikan
+// pakai frasa "teruskan ke CS Senior" — itu jadi marker untuk trigger notify.
+const NEGO_ESCALATION_PATTERN = /teruskan(?:nya)?\s+(?:ke\s+)?CS\s*Senior/i;
 
 const FALLBACK_TIMEOUT =
   "Maaf kak, sistem saya lagi sibuk. Coba tanyakan lagi dalam beberapa saat ya 🙏";
@@ -111,9 +115,22 @@ function normalizeReply(reply, userText = "") {
   return normalized;
 }
 
+function buildNegoNotify(phone, customerMessage) {
+  const trimmed = (customerMessage || "").slice(0, 500).trim();
+  return {
+    jid: CS_SENIOR_JID,
+    message:
+      "📞 *NEGO HARGA — perlu di-follow-up*\n\n" +
+      `Customer chat: https://wa.me/${phone}\n` +
+      `Pesan customer: "${trimmed}"\n\n` +
+      "Bot sudah inform customer akan dikontak. Mohon segera chat customer langsung ya 🙏",
+  };
+}
+
 // Return value:
-//   string                          → kirim sebagai teks biasa
-//   { type: 'image', images, text } → kirim gambar (text opsional dikirim sebelum gambar)
+//   string                                      → kirim sebagai teks biasa
+//   { type: 'image', images, text, notify? }    → kirim gambar (text opsional)
+//   { type: 'text', reply, notify }             → kirim teks + forward notify ke nomor internal
 async function handleAI(phone, text) {
   try {
     logger.info({ phone: maskPhone(phone) }, "Sending to AI...");
@@ -130,13 +147,27 @@ async function handleAI(phone, text) {
       );
     }
 
+    // Detect escalation nego → kirim notify ke CS Senior (manusia chat customer langsung).
+    let negoNotify = null;
+    if (NEGO_ESCALATION_PATTERN.test(rawReply)) {
+      negoNotify = buildNegoNotify(phone, text);
+      logger.info(
+        { phone: maskPhone(phone) },
+        "Nego escalation terdeteksi — forwarding ke CS Senior",
+      );
+    }
+
     // Cek apakah AI bermaksud mengirim gambar yang tersedia di sistem
     const imageIntent = detectImageIntent(rawReply);
     if (imageIntent) {
-      return imageIntent;
+      return negoNotify ? { ...imageIntent, notify: negoNotify } : imageIntent;
     }
 
-    return normalizeReply(rawReply, text);
+    const normalized = normalizeReply(rawReply, text);
+    if (negoNotify) {
+      return { type: "text", reply: normalized, notify: negoNotify };
+    }
+    return normalized;
   } catch (err) {
     if (err.message === "TIMEOUT") {
       return FALLBACK_TIMEOUT;

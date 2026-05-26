@@ -45,6 +45,17 @@ const STATE_DIR = process.env.SESSION_DIR
   : path.join(__dirname, "../../auth");
 const STATE_FILE = path.join(STATE_DIR, "bukti_tf_state.json");
 
+// State: customer sudah konfirmasi TF, sedang diminta isi form data (post-TF)
+const awaitingTfFormState = new Map(); // phone -> timestamp
+const TF_FORM_EXPIRY_MS = 24 * 60 * 60 * 1000;
+const TF_FORM_STATE_FILE = path.join(STATE_DIR, "tf_form_state.json");
+
+// State: customer sedang diminta kasih rating chatbot (post-form, sebelum handover ke CS Order)
+const awaitingRatingState = new Map(); // phone -> timestamp
+const RATING_EXPIRY_MS = 24 * 60 * 60 * 1000;
+const RATING_STATE_FILE = path.join(STATE_DIR, "rating_state.json");
+const RATING_LOG_FILE = path.join(STATE_DIR, "ratings.jsonl");
+
 function ensureStateDir() {
   try {
     if (!fs.existsSync(STATE_DIR)) {
@@ -74,28 +85,90 @@ function saveBuktiTfState() {
   } catch (_) {}
 }
 
+function loadTfFormState() {
+  try {
+    if (!fs.existsSync(TF_FORM_STATE_FILE)) return;
+    const data = JSON.parse(fs.readFileSync(TF_FORM_STATE_FILE, "utf-8"));
+    const now = Date.now();
+    for (const [phone, ts] of Object.entries(data)) {
+      if (typeof ts === "number" && now - ts <= TF_FORM_EXPIRY_MS) {
+        awaitingTfFormState.set(phone, ts);
+      }
+    }
+  } catch (_) {}
+}
+
+function saveTfFormState() {
+  try {
+    ensureStateDir();
+    const obj = Object.fromEntries(awaitingTfFormState);
+    fs.writeFileSync(TF_FORM_STATE_FILE, JSON.stringify(obj));
+  } catch (_) {}
+}
+
+function loadRatingState() {
+  try {
+    if (!fs.existsSync(RATING_STATE_FILE)) return;
+    const data = JSON.parse(fs.readFileSync(RATING_STATE_FILE, "utf-8"));
+    const now = Date.now();
+    for (const [phone, ts] of Object.entries(data)) {
+      if (typeof ts === "number" && now - ts <= RATING_EXPIRY_MS) {
+        awaitingRatingState.set(phone, ts);
+      }
+    }
+  } catch (_) {}
+}
+
+function saveRatingState() {
+  try {
+    ensureStateDir();
+    const obj = Object.fromEntries(awaitingRatingState);
+    fs.writeFileSync(RATING_STATE_FILE, JSON.stringify(obj));
+  } catch (_) {}
+}
+
+function appendRatingLog(phone, rating, comment) {
+  try {
+    ensureStateDir();
+    const entry = {
+      ts: new Date().toISOString(),
+      phone,
+      rating,
+      comment: (comment || "").trim(),
+    };
+    fs.appendFileSync(RATING_LOG_FILE, JSON.stringify(entry) + "\n");
+  } catch (_) {}
+}
+
 loadBuktiTfState();
+loadTfFormState();
+loadRatingState();
 
 const FINANCE_NUMBER = "+62 882-2596-8185";
+
+// Finance JID — tujuan auto-notify saat customer konfirmasi TF (parallel verify).
+// Default derive dari FINANCE_NUMBER: 6288225968185 (tanpa + dan tanpa dash).
+const FINANCE_JID = `${process.env.FINANCE_JID || "6288225968185"}@s.whatsapp.net`;
+
+// CS Order — tujuan forward data customer setelah bukti TF & form diisi.
+// Format JID Baileys: <country-code-no-plus><number>@s.whatsapp.net
+const CS_ORDER_NUMBER_DISPLAY = process.env.CS_ORDER_NUMBER_DISPLAY || "+62 878-9855-5117";
+const CS_ORDER_JID = `${process.env.CS_ORDER_JID || "6287898555117"}@s.whatsapp.net`;
+
+// CS Senior — tujuan forward nego harga. Default sama dengan CS Order (087898555117),
+// tapi bisa di-set terpisah via env CS_SENIOR_JID kalau nantinya peran dipisah.
+const CS_SENIOR_JID = `${process.env.CS_SENIOR_JID || "6287898555117"}@s.whatsapp.net`;
+
 const BUKTI_TF_REPLY =
   "Terima kasih banyak ya kak 🙏\n\n" +
   `Mohon dipastikan bukti transaksinya sudah dikirim ke admin finance kami di ${FINANCE_NUMBER} ya kak supaya bisa segera dikonfirmasi.\n\n` +
-  "Sambil menunggu konfirmasi finance, mohon dilengkapi *form order* berikut ya kak _(khusus orderan yang dikirim, kalau diambil sendiri alamat tidak perlu diisi)_ agar memudahkan kami menghitung biaya ongkir dan total pembelian 🙏\n\n" +
-  "*FORM ORDER*\n\n" +
+  "Sambil menunggu konfirmasi finance, mohon dilengkapi data berikut ya kak supaya orderannya bisa langsung kami teruskan ke CS Order 🙏\n\n" +
+  "*FORM DATA CUSTOMER*\n\n" +
   "Nama : \n" +
-  "Alamat Lengkap : \n" +
-  "Desa/Kel : \n" +
-  "Kec : \n" +
-  "Kab/Kota : \n" +
-  "Prov : \n" +
-  "No HP : \n\n" +
-  "Paket yang diambil : \n" +
-  "Bahan utama : \n" +
-  "Kombinasi bahan (khusus pecah pola) : \n" +
-  "Nama tim : \n\n" +
-  "Promo yg diambil (s&k berlaku) : \n\n" +
-  "Note untuk admin (pattern lab) : \n\n" +
-  "Setelah form dilengkapi & finance konfirmasi pembayaran, tim desain kami langsung mulai proses ya 😊";
+  "No WA : \n" +
+  "Alamat lengkap : \n" +
+  "Jumlah TF : \n\n" +
+  "Cukup balas pesan ini dengan format di atas ya kak. Setelah itu CS Order kami yang akan langsung kontak kakak untuk lanjut proses 😊";
 
 // Greeting variants — anti-template, pick random. Promo slot via PROMO_TAGLINE env.
 const GREETING_VARIANTS = [
@@ -132,6 +205,81 @@ function isAwaitingBuktiTf(phone) {
 function clearAwaitingBuktiTf(phone) {
   awaitingBuktiTfState.delete(phone);
   saveBuktiTfState();
+}
+
+function setAwaitingTfForm(phone) {
+  awaitingTfFormState.set(phone, Date.now());
+  saveTfFormState();
+}
+
+function isAwaitingTfForm(phone) {
+  const ts = awaitingTfFormState.get(phone);
+  if (!ts) return false;
+  if (Date.now() - ts > TF_FORM_EXPIRY_MS) {
+    awaitingTfFormState.delete(phone);
+    saveTfFormState();
+    return false;
+  }
+  return true;
+}
+
+function clearAwaitingTfForm(phone) {
+  awaitingTfFormState.delete(phone);
+  saveTfFormState();
+}
+
+// Detect filled post-TF form. Strict: butuh 4 label (nama, no wa, alamat, jumlah tf)
+// dengan value non-empty.
+function isPostTfFormFilled(text) {
+  const hasNama = /\bnama\s*:\s*\S/i.test(text);
+  const hasWa = /\bno\.?\s*wa\s*:\s*\S/i.test(text);
+  const hasAlamat = /\balamat(\s+lengkap)?\s*:\s*\S/i.test(text);
+  const hasJumlah = /\bjumlah\s*tf\s*:\s*\S/i.test(text);
+  return hasNama && hasWa && hasAlamat && hasJumlah;
+}
+
+function setAwaitingRating(phone) {
+  awaitingRatingState.set(phone, Date.now());
+  saveRatingState();
+}
+
+function isAwaitingRating(phone) {
+  const ts = awaitingRatingState.get(phone);
+  if (!ts) return false;
+  if (Date.now() - ts > RATING_EXPIRY_MS) {
+    awaitingRatingState.delete(phone);
+    saveRatingState();
+    return false;
+  }
+  return true;
+}
+
+function clearAwaitingRating(phone) {
+  awaitingRatingState.delete(phone);
+  saveRatingState();
+}
+
+// Extract rating (1-5) dari text. Sisa text dipakai sebagai komentar.
+function parseRating(text) {
+  if (!text) return null;
+  const m = text.match(/(?<![\d])([1-5])(?![\d])/);
+  if (!m) return null;
+  const rating = parseInt(m[1], 10);
+  const comment = text.replace(/(?<![\d])([1-5])(?![\d])/, "").trim();
+  return { rating, comment };
+}
+
+function parsePostTfForm(text) {
+  const grab = (re) => {
+    const m = text.match(re);
+    return m ? m[1].trim() : "";
+  };
+  return {
+    nama: grab(/\bnama\s*:\s*(.+?)(?:\r?\n|$)/i),
+    noWa: grab(/\bno\.?\s*wa\s*:\s*(.+?)(?:\r?\n|$)/i),
+    alamat: grab(/\balamat(?:\s+lengkap)?\s*:\s*(.+?)(?:\r?\n|$)/i),
+    jumlahTf: grab(/\bjumlah\s*tf\s*:\s*(.+?)(?:\r?\n|$)/i),
+  };
 }
 
 const PRICELIST_JERSEY_CATEGORIES = [
@@ -339,28 +487,79 @@ function handleCommand(phone, text) {
   }
 
   // ── Bukti TF: customer mengkonfirmasi transfer setelah rekening dikirim ─────
-  // Hanya aktif jika state awaitingBuktiTf di-set (artinya AI sudah kirim rekening)
+  // Hanya aktif jika state awaitingBuktiTf di-set (artinya AI sudah kirim rekening).
+  // Setelah konfirmasi: bot kirim FORM DATA CUSTOMER, set state awaitingTfForm,
+  // DAN auto-notify Finance agar paralel mulai verifikasi rekening BCA.
   if (isAwaitingBuktiTf(phone) && isBuktiTfConfirmation(lower)) {
     clearAwaitingBuktiTf(phone);
-    return { handled: true, reply: BUKTI_TF_REPLY };
+    setAwaitingTfForm(phone);
+
+    const financeMessage =
+      "💰 *BUKTI TF CLAIM — perlu verifikasi*\n\n" +
+      `Customer chat: https://wa.me/${phone}\n` +
+      `Pesan konfirmasi customer: "${text.slice(0, 300)}"\n\n` +
+      "Mohon cek rekening BCA 731-5250889 untuk konfirmasi DP desain ya 🙏\n" +
+      "Sambil verifikasi, customer di-arahkan untuk lengkapi form data. " +
+      "Kalau sudah masuk, mohon kabari ke CS Order supaya bisa lanjut proses orderan.";
+
+    return {
+      handled: true,
+      reply: BUKTI_TF_REPLY,
+      notify: {
+        jid: FINANCE_JID,
+        message: financeMessage,
+      },
+    };
   }
 
-  // ── Filled Form Order: customer balas form lengkap dengan isian ──────────────
-  // Detect dengan label form + minimal satu field yang diisi (Nama : nilai)
-  if (
-    lower.includes("form order") &&
-    /\bnama\s*:\s*\S+/i.test(lower) &&
-    /\bpaket\s+yang\s+diambil\s*:\s*\S+/i.test(lower)
-  ) {
+  // ── Rating customer: capture rating chatbot (post-form, untuk evaluasi)
+  // Gated by state awaitingRating. Cek SEBELUM post-TF form handler supaya angka
+  // yang dikirim customer di-treat sebagai rating, bukan form ulang.
+  if (isAwaitingRating(phone)) {
+    const parsed = parseRating(text);
+    if (parsed) {
+      appendRatingLog(phone, parsed.rating, parsed.comment);
+      clearAwaitingRating(phone);
+      return {
+        handled: true,
+        reply:
+          `Terima kasih banyak ya kak untuk penilaiannya ⭐ (${parsed.rating}/5) 🙏\n\n` +
+          "Masukan kakak akan kami pakai untuk terus perbaiki layanan chatbot. " +
+          "Tinggal tunggu CS Order menghubungi ya kak untuk lanjut proses orderan 😊",
+      };
+    }
+    // Tidak match angka rating → biarkan handler lain proses, state tetap aktif
+  }
+
+  // ── Filled Post-TF Form: customer kirim form data (nama, no wa, alamat, jumlah TF)
+  // Gated by state awaitingTfForm. Setelah terisi → reply customer + notify CS Order +
+  // minta rating sebagai langkah evaluasi.
+  if (isAwaitingTfForm(phone) && isPostTfFormFilled(text)) {
+    const form = parsePostTfForm(text);
+    clearAwaitingTfForm(phone);
+    setAwaitingRating(phone);
+
+    const csOrderMessage =
+      "📦 *ORDER BARU — Data customer sudah lengkap*\n\n" +
+      `Customer chat: https://wa.me/${phone}\n` +
+      `Nama: ${form.nama}\n` +
+      `No WA: ${form.noWa}\n` +
+      `Alamat lengkap: ${form.alamat}\n` +
+      `Jumlah TF: ${form.jumlahTf}\n\n` +
+      "⚠️ *Finance masih verifikasi bukti TF.* Mohon TUNGGU green light dari Finance sebelum mulai proses orderan ya 🙏\n" +
+      "(Finance sudah ter-notify otomatis di awal saat customer konfirmasi TF)";
+
     return {
       handled: true,
       reply:
-        "Mantap kak, form ordernya sudah kami catat 📝\n\n" +
-        "Selanjutnya admin kami akan chat langsung untuk:\n" +
-        "• Konfirmasi pembayaran DP desain dengan tim finance\n" +
-        "• Mulai proses desain sesuai detail orderan\n" +
-        "• Hitung total + DP produksi setelah desain fix\n\n" +
-        "Terima kasih banyak ya kak, mohon ditunggu sebentar 🙏",
+        "Mantap kak, data sudah kami terima 📝\n\n" +
+        `Sebentar ya kak, CS Order kami (${CS_ORDER_NUMBER_DISPLAY}) akan langsung kontak kakak untuk lanjut proses orderan 🙏\n\n` +
+        "Sebagai penutup, boleh kakak bantu kasih penilaian untuk chatbot kami? Cukup balas dengan angka *1-5* ya kak (1 = kurang banget, 5 = sangat memuaskan). Boleh tambahkan saran/komentar singkat juga kalau ada 😊\n\n" +
+        "Penilaian ini sangat membantu kami untuk terus perbaiki layanan. Terima kasih banyak 🙏",
+      notify: {
+        jid: CS_ORDER_JID,
+        message: csOrderMessage,
+      },
     };
   }
 
@@ -1147,5 +1346,14 @@ module.exports = {
   setAwaitingBuktiTf,
   isAwaitingBuktiTf,
   clearAwaitingBuktiTf,
+  setAwaitingTfForm,
+  isAwaitingTfForm,
+  clearAwaitingTfForm,
+  setAwaitingRating,
+  isAwaitingRating,
+  clearAwaitingRating,
   BUKTI_TF_REPLY,
+  CS_ORDER_JID,
+  CS_SENIOR_JID,
+  FINANCE_JID,
 };

@@ -2,7 +2,9 @@ const {
   handleCommand,
   isAwaitingBuktiTf,
   clearAwaitingBuktiTf,
+  setAwaitingTfForm,
   BUKTI_TF_REPLY,
+  FINANCE_JID,
 } = require("../handlers/commandHandler");
 const { handleAI } = require("../handlers/aiHandler");
 const { isRateLimited, randomDelay } = require("../utils/throttle");
@@ -64,8 +66,31 @@ async function routeMessage(sock, msg) {
           "Media (bukti TF) received after DP rekening — redirecting to finance",
         );
         clearAwaitingBuktiTf(phone);
+        setAwaitingTfForm(phone);
         await randomDelay();
         await sendMessage(sock, jid, BUKTI_TF_REPLY);
+
+        // Auto-notify Finance: customer kirim image bukti TF
+        try {
+          await sock.sendMessage(FINANCE_JID, {
+            text:
+              "💰 *BUKTI TF CLAIM — perlu verifikasi* (image)\n\n" +
+              `Customer chat: https://wa.me/${phone}\n` +
+              "Customer kirim image bukti TF tanpa caption.\n\n" +
+              "Mohon cek rekening BCA 731-5250889 untuk konfirmasi DP desain ya 🙏\n" +
+              "Sambil verifikasi, customer di-arahkan untuk lengkapi form data. " +
+              "Kalau sudah masuk, mohon kabari ke CS Order supaya bisa lanjut proses orderan.",
+          });
+          logger.info(
+            { from: maskPhone(phone), to: FINANCE_JID },
+            "Finance notify forwarded (bukti TF image)",
+          );
+        } catch (err) {
+          logger.error(
+            { jid: FINANCE_JID, err: err.message },
+            "Failed to notify Finance for bukti TF image",
+          );
+        }
         return;
       }
 
@@ -131,6 +156,25 @@ async function routeMessage(sock, msg) {
       } else {
         await sendMessage(sock, jid, commandResult.reply);
       }
+
+      // Notify aksi sekunder — forward data ke nomor internal (mis. CS Order)
+      if (commandResult.notify?.jid && commandResult.notify?.message) {
+        try {
+          await sock.sendMessage(commandResult.notify.jid, {
+            text: commandResult.notify.message,
+          });
+          logger.info(
+            { from: maskPhone(phone), to: commandResult.notify.jid },
+            "Notify forwarded",
+          );
+        } catch (err) {
+          logger.error(
+            { jid: commandResult.notify.jid, err: err.message },
+            "Failed to send notify message",
+          );
+        }
+      }
+
       return;
     }
 
@@ -138,7 +182,10 @@ async function routeMessage(sock, msg) {
     await enqueueForPhone(phone, async () => {
       const aiResult = await handleAI(phone, text);
 
-      // AI bisa return string (teks) atau object { type: 'image', images, text }
+      // AI bisa return:
+      //   string                                   → teks biasa
+      //   { type: 'image', images, text, notify? } → gambar (+ notify opsional)
+      //   { type: 'text', reply, notify }          → teks + notify ke nomor internal
       if (aiResult && typeof aiResult === "object" && aiResult.type === "image") {
         if (aiResult.text) {
           await sendMessage(sock, jid, aiResult.text);
@@ -152,8 +199,33 @@ async function routeMessage(sock, msg) {
             "Maaf kak, gambar belum berhasil terkirim. Coba ulangi sekali lagi atau ketik admin ya 🙏",
           );
         }
+      } else if (aiResult && typeof aiResult === "object" && aiResult.type === "text") {
+        await sendMessage(sock, jid, aiResult.reply);
       } else {
         await sendMessage(sock, jid, aiResult);
+      }
+
+      // Notify ke nomor internal (mis. CS Senior untuk nego escalation)
+      if (
+        aiResult &&
+        typeof aiResult === "object" &&
+        aiResult.notify?.jid &&
+        aiResult.notify?.message
+      ) {
+        try {
+          await sock.sendMessage(aiResult.notify.jid, {
+            text: aiResult.notify.message,
+          });
+          logger.info(
+            { from: maskPhone(phone), to: aiResult.notify.jid },
+            "AI notify forwarded",
+          );
+        } catch (err) {
+          logger.error(
+            { jid: aiResult.notify.jid, err: err.message },
+            "Failed to send AI notify message",
+          );
+        }
       }
     });
   } catch (err) {
