@@ -843,10 +843,12 @@ function handleCommand(phone, text) {
     const linkClassic = "https://www.instagram.com/p/DXO__hBiQqJ/?img_index=3&igsh=aHp6NXZzNGxkNXlh";
     const linkPro = "https://www.instagram.com/p/DYj9lwLiU35/?igsh=MXUyMXpiaWR1ajFlYQ==";
 
-    // Detect tier spesifik (word-boundary, supaya "pro" tidak match "produksi")
-    const tierStandar = /\b(standar|standard)\b/.test(lower);
-    const tierClassic = /\b(classic|klasik)\b/.test(lower);
-    const tierPro = /\bpro\b/.test(lower);
+    // Detect tier spesifik (word-boundary, supaya "pro" tidak match "produksi").
+    // Pola termasuk typo umum: standar (stadar, standa, stndar, standr, satndar),
+    // classic (clasic, klasik, klassic, klsik, kelasik), pro (strict — 3 chars).
+    const tierStandar = /\b(standar[d]?|stadar|standa|stndar|standr|satndar|sntandar)\b/i.test(lower);
+    const tierClassic = /\b(classic|clasic|klasik|klassic|klsik|kelasik|klassik)\b/i.test(lower);
+    const tierPro = /\bpro\b/i.test(lower);
 
     if (tierStandar && !tierClassic && !tierPro) {
       return {
