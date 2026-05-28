@@ -814,6 +814,89 @@ function handleCommand(phone, text) {
     };
   }
 
+  // ── Contoh Jersey per Paket (Standar / Classic / Pro) — arahkan ke link IG ───
+  const contohPaketKeywords = [
+    "contoh jersey paket",
+    "contoh paket jersey",
+    "contoh paket",
+    "contoh jersey standar",
+    "contoh jersey classic",
+    "contoh jersey pro",
+    "contoh standar",
+    "contoh classic",
+    "contoh klasik",
+    "contoh pro",
+    "lihat jersey standar",
+    "lihat jersey classic",
+    "lihat jersey pro",
+    "lihat paket standar",
+    "lihat paket classic",
+    "lihat paket pro",
+    "minta contoh jersey",
+    "kirim contoh jersey",
+    "contoh jersey",
+    "liat contoh jersey",
+  ];
+
+  if (!isOrderContextGlobal && contohPaketKeywords.some((k) => lower.includes(k))) {
+    const linkStandar = "https://www.instagram.com/p/DWn374ICVoO/?igsh=MWVuaTNkYzJwOWtzNA==";
+    const linkClassic = "https://www.instagram.com/p/DXO__hBiQqJ/?img_index=3&igsh=aHp6NXZzNGxkNXlh";
+    const linkPro = "https://www.instagram.com/p/DYj9lwLiU35/?igsh=MXUyMXpiaWR1ajFlYQ==";
+
+    // Detect tier spesifik (word-boundary, supaya "pro" tidak match "produksi")
+    const tierStandar = /\b(standar|standard)\b/.test(lower);
+    const tierClassic = /\b(classic|klasik)\b/.test(lower);
+    const tierPro = /\bpro\b/.test(lower);
+
+    if (tierStandar && !tierClassic && !tierPro) {
+      return {
+        handled: true,
+        reply:
+          "Halo kak, mohon izin kami informasikan ya kak 🙏\n\n" +
+          "Berikut contoh jersey *Paket Standar* — bahan dryfit Brazil, ringan dan adem, cocok untuk kebutuhan tim dengan budget yang lebih terjangkau:\n\n" +
+          linkStandar + "\n\n" +
+          "Setelah lihat, kira-kira tertarik konsultasi lebih lanjut soal Paket Standar, atau mau saya kasih lihat contoh Paket Classic & Pro juga buat pembanding?",
+      };
+    }
+
+    if (tierClassic && !tierStandar && !tierPro) {
+      return {
+        handled: true,
+        reply:
+          "Halo kak, mohon izin kami informasikan ya kak 🙏\n\n" +
+          "Berikut contoh jersey *Paket Classic* — tier menengah dengan bahan premium seperti Milano, Benzema, atau Emboss Toppo. Tampilannya lebih halus dan tekstur kainnya lebih nyaman dipakai:\n\n" +
+          linkClassic + "\n\n" +
+          "Tertarik lanjut diskusi soal Paket Classic, atau mau lihat contoh Paket Standar & Pro juga sebagai pembanding kak?",
+      };
+    }
+
+    if (tierPro && !tierStandar && !tierClassic) {
+      return {
+        handled: true,
+        reply:
+          "Halo kak, mohon izin kami informasikan ya kak 🙏\n\n" +
+          "Berikut contoh jersey *Paket Pro* — tier premium dengan bahan high-end (Jacquard Topo / Spider / Airwalk) plus fitur unggulan seperti Cool-Active dan UV-Protective. Pilihan utama untuk tim yang mau tampil maksimal:\n\n" +
+          linkPro + "\n\n" +
+          "Kira-kira tertarik konsultasi lebih lanjut soal Paket Pro, atau mau lihat contoh Paket Standar & Classic juga sebagai pembanding kak?",
+      };
+    }
+
+    // Generic / minta semua / tidak sebut tier spesifik
+    return {
+      handled: true,
+      reply:
+        "Halo kak, mohon izin kami informasikan ya kak 🙏\n\n" +
+        "Berikut contoh jersey untuk masing-masing paket Ayres yang bisa kakak lihat langsung:\n\n" +
+        "🏷️ *Paket Standar* — entry-level, bahan dryfit Brazil\n" +
+        linkStandar + "\n\n" +
+        "🏷️ *Paket Classic* — tier menengah, bahan Milano / Benzema / Emboss Toppo\n" +
+        linkClassic + "\n\n" +
+        "🏷️ *Paket Pro* — premium, bahan Jacquard Topo / Spider / Airwalk + fitur Cool-Active & UV-Protective\n" +
+        linkPro + "\n\n" +
+        "Setelah lihat, kira-kira paket mana yang paling cocok dengan kebutuhan tim kakak?",
+    };
+  }
+
   // ── Katalog: step 1 — user minta katalog ─────────────────────────────────────
   const katalogKeywords = [
     "katalog",

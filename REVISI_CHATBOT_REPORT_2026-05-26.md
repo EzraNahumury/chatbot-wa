@@ -2,7 +2,7 @@
 
 **Tanggal:** 26 Mei 2026
 **Branch:** `main`
-**Commits:** `aa89652`, `4b0ddca`, `77333f4`, `fd2b3de`, `4c42567`, (+ commit pattern lab terbaru)
+**Commits:** `aa89652`, `4b0ddca`, `77333f4`, `fd2b3de`, `4c42567`, `95cc0bb`, `9565536`, (+ commit contoh paket terbaru)
 **Status:** Sudah di-push ke `origin/main`, Railway auto-deploy aktif
 **Author:** Ezra Kristanto Nahumury (dibantu Claude Code)
 
@@ -10,7 +10,7 @@
 
 ## 1. Ringkasan Eksekutif
 
-Sesi revisi hari ini menyelesaikan **14 item perubahan** terhadap chatbot WhatsApp Ayres Apparel. Cakupan revisi mencakup empat bidang utama:
+Sesi revisi hari ini menyelesaikan **15 item perubahan** terhadap chatbot WhatsApp Ayres Apparel. Cakupan revisi mencakup empat bidang utama:
 
 1. **Persona & komunikasi** — penyegaran greeting, aturan penutup chat, anti-template, dan penghapusan dump form 9-poin.
 2. **Data referensi & sales aid** — tabel tarif ongkir per provinsi (JNE JTR), penyempurnaan skema paket express + diskon volume, rule urgency closing, dan dokumentasi Deadline Lock + program kompensasi keterlambatan.
@@ -21,7 +21,7 @@ Total file yang dimodifikasi: **5 file inti** (`src/ai/prompt.js`, `src/handlers
 
 ---
 
-## 2. Tabel Ringkasan 14 Revisi
+## 2. Tabel Ringkasan 15 Revisi
 
 | # | Item | File Diubah | Status |
 |---|------|-------------|--------|
@@ -39,6 +39,7 @@ Total file yang dimodifikasi: **5 file inti** (`src/ai/prompt.js`, `src/handlers
 | 12 | Urgency hook (gating ketat, momen tepat) | `prompt.js` | ✅ Selesai |
 | 13 | Deadline Lock + Kompensasi Keterlambatan (jaminan + 4 tier kompensasi) | `knowledge-base.json`, `prompt.js` | ✅ Selesai |
 | 14 | Pattern Lab handler (penjelasan 4 pola + pancingan lihat gambar katalog) | `commandHandler.js`, `knowledge-base.json`, `prompt.js` | ✅ Selesai |
+| 15 | Contoh Jersey per Paket (link IG Standar/Classic/Pro + detection tier) | `commandHandler.js`, `knowledge-base.json`, `prompt.js` | ✅ Selesai |
 
 ---
 
@@ -409,6 +410,79 @@ Bot:      Halo kak, mohon izin kami informasikan ya kak 🙏
 
 ---
 
+### 3.15 Contoh Jersey per Paket (Link IG Standar/Classic/Pro)
+
+**Masalah sebelumnya:**
+- Customer minta "contoh jersey paket Standar/Classic/Pro" tidak punya handler khusus → fall ke AI → response tidak konsisten (kadang cuma kasih IG link generic, kadang skip).
+- Tidak ada mapping antara nama paket dan visual produk real.
+
+**Perubahan:**
+
+**1. Handler baru di `src/handlers/commandHandler.js`** (sebelum block katalog generic):
+- Keywords trigger: `contoh jersey paket`, `contoh paket`, `contoh paket standar/classic/pro`, `contoh jersey standar/classic/pro`, `lihat jersey paket X`, `kirim contoh jersey`, `liat contoh jersey`, dll (20 varian).
+- Detection tier dengan word-boundary regex (`\bstandar\b`, `\bclassic\b`, `\bpro\b`) — `pro` tidak akan match `produksi`.
+- 3 mode reply:
+  - **Specific tier:** customer sebut Standar saja / Classic saja / Pro saja → reply dengan kalimat pembuka + deskripsi singkat tier + link IG paket bersangkutan + closing question dengan opsi banding paket lain.
+  - **Generic:** customer minta tanpa sebut tier → kirim 3 link IG sekaligus (Standar/Classic/Pro) dengan label tier + closing question rekomendasi.
+- Reply selalu mulai dengan: *"Halo kak, mohon izin kami informasikan ya kak 🙏"* dan diakhiri pertanyaan kontekstual.
+
+**Link IG resmi per paket:**
+
+| Paket | Link IG |
+|-------|---------|
+| Paket Standar | https://www.instagram.com/p/DWn374ICVoO/?igsh=MWVuaTNkYzJwOWtzNA== |
+| Paket Classic | https://www.instagram.com/p/DXO__hBiQqJ/?img_index=3&igsh=aHp6NXZzNGxkNXlh |
+| Paket Pro | https://www.instagram.com/p/DYj9lwLiU35/?igsh=MXUyMXpiaWR1ajFlYQ== |
+
+**2. Update KB `knowledge-base.json`:**
+- Section baru `## Contoh Visual Jersey per Paket (Link IG)` dengan 3 link + note: handler sistem auto-arahkan sesuai keyword.
+
+**3. Update rule `src/ai/prompt.js`:**
+- AI dilarang copy-paste link IG manual atau ngarang visual sendiri.
+- AI WAJIB arahkan customer ke keyword `contoh paket standar` / `contoh paket classic` / `contoh paket pro` / `contoh jersey paket` — handler sistem yang kasih link sesuai paket.
+
+**Behavior baru:**
+
+```
+Customer: contoh jersey paket pro dong kak
+
+Bot:      Halo kak, mohon izin kami informasikan ya kak 🙏
+
+          Berikut contoh jersey Paket Pro — tier premium dengan bahan
+          high-end (Jacquard Topo / Spider / Airwalk) plus fitur unggulan
+          seperti Cool-Active dan UV-Protective. Pilihan utama untuk tim
+          yang mau tampil maksimal:
+
+          https://www.instagram.com/p/DYj9lwLiU35/?igsh=MXUyMXpiaWR1ajFlYQ==
+
+          Kira-kira tertarik konsultasi lebih lanjut soal Paket Pro,
+          atau mau lihat contoh Paket Standar & Classic juga sebagai
+          pembanding kak?
+```
+
+```
+Customer: minta contoh jersey kak
+
+Bot:      Halo kak, mohon izin kami informasikan ya kak 🙏
+
+          Berikut contoh jersey untuk masing-masing paket Ayres yang bisa
+          kakak lihat langsung:
+
+          🏷️ Paket Standar — entry-level, bahan dryfit Brazil
+          https://www.instagram.com/p/DWn374ICVoO/?igsh=MWVuaTNkYzJwOWtzNA==
+
+          🏷️ Paket Classic — tier menengah, bahan Milano / Benzema / Emboss Toppo
+          https://www.instagram.com/p/DXO__hBiQqJ/?img_index=3&igsh=aHp6NXZzNGxkNXlh
+
+          🏷️ Paket Pro — premium, bahan Jacquard Topo / Spider / Airwalk + fitur
+          https://www.instagram.com/p/DYj9lwLiU35/?igsh=MXUyMXpiaWR1ajFlYQ==
+
+          Setelah lihat, kira-kira paket mana yang paling cocok dengan
+          kebutuhan tim kakak?
+```
+
+---
+
 ## 4. Diagram Flow
 
 ### 4.1 Routing Pesan Masuk (Top-Level)
@@ -733,7 +807,9 @@ Bot:      Untuk 50 pcs dengan deadline 1 minggu masuk ke Express 5 atau 7
 | `77333f4` | 26 Mei 2026 | Laporan revisi (file ini) |
 | `fd2b3de` | 26 Mei 2026 | Fix mermaid render error (inner quotes & unicode arrows) |
 | `4c42567` | 26 Mei 2026 | Deadline Lock & Kompensasi Keterlambatan (revisi #13) + update laporan |
-| (HEAD baru) | 26 Mei 2026 | Pattern Lab handler (revisi #14) + update laporan |
+| `95cc0bb` | 26 Mei 2026 | Pattern Lab handler (revisi #14) + update laporan |
+| `9565536` | 26 Mei 2026 | Perkuat rule KB coverage + closing question |
+| (HEAD baru) | 26 Mei 2026 | Contoh Jersey per Paket — link IG Standar/Classic/Pro (revisi #15) |
 
 ---
 
