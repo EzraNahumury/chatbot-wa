@@ -564,28 +564,22 @@ function handleCommand(phone, text) {
   }
 
   // ── Greeting / Menu ──────────────────────────────────────────────────────────
-  // "menu" sengaja TIDAK di-include sebagai substring (akan false-positive
-  // pada kata "menunggu", "menumpuk", dll.). Exact match "menu" tetap ditangani di bawah.
-  const greetingKeywords = [
-    "halo",
-    "hai",
-    "helo",
-    "hello",
-    "hi ",
-    "hi,",
-    "selamat pagi",
-    "selamat siang",
-    "selamat sore",
-    "selamat malam",
-    "assalamualaikum",
-    "permisi",
-    "p a g i",
+  // PENTING: hanya fire greeting kalau pesan MURNI greeting (tidak ada substansi
+  // order/produk/dll). Sebelumnya pakai substring `includes('hai')` yang greedy
+  // → "hai kak saya mau pesan jersey futsal 9 pcs" ke-intercept greeting, padahal
+  // intent customer mau order. Sekarang pakai regex strict end-of-string.
+  const cleanedGreeting = lower.trim().replace(/[!?.,;:]+$/g, "").trim();
+  const greetingOnlyPatterns = [
+    /^(halo|hai|helo|hello|hi)(\s+(kak|kakak|min|admin|ya|aja|nih|dong|bos|bro|gan|sis))*$/i,
+    /^(selamat\s+(pagi|siang|sore|malam))(\s+(kak|kakak|min|admin|ya))*$/i,
+    /^(assalamualaikum|assalamu'alaikum|asw|asww|assalam)(\s+(wr\.?wb\.?|warahmatullah|kak|kakak))*$/i,
+    /^permisi(\s+(kak|kakak|min|admin))*$/i,
+    /^p\s+a\s+g\s+i$/i,
+    /^menu$/i,
   ];
-  if (
-    lower === "hi" ||
-    lower === "menu" ||
-    greetingKeywords.some((k) => lower.includes(k))
-  ) {
+  const isGreetingOnly = greetingOnlyPatterns.some((p) => p.test(cleanedGreeting));
+
+  if (isGreetingOnly) {
     return {
       handled: true,
       reply: buildGreetingReply(),
