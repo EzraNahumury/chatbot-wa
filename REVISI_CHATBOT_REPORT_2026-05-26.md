@@ -2,7 +2,7 @@
 
 **Tanggal:** 26 Mei 2026
 **Branch:** `main`
-**Commits:** `aa89652`, `4b0ddca`, `77333f4`, `fd2b3de`, `4c42567`, `95cc0bb`, `9565536`, (+ commit contoh paket terbaru)
+**Commits:** `aa89652`, `4b0ddca`, `77333f4`, `fd2b3de`, `4c42567`, `95cc0bb`, `9565536`, `77ca754`, `230de4b`, `738b590`, `8cdfe93`, (+ commit update laporan terbaru)
 **Status:** Sudah di-push ke `origin/main`, Railway auto-deploy aktif
 **Author:** Ezra Kristanto Nahumury (dibantu Claude Code)
 
@@ -10,7 +10,7 @@
 
 ## 1. Ringkasan Eksekutif
 
-Sesi revisi hari ini menyelesaikan **15 item perubahan** terhadap chatbot WhatsApp Ayres Apparel. Cakupan revisi mencakup empat bidang utama:
+Sesi revisi hari ini menyelesaikan **16 item perubahan** terhadap chatbot WhatsApp Ayres Apparel. Cakupan revisi mencakup empat bidang utama:
 
 1. **Persona & komunikasi** — penyegaran greeting, aturan penutup chat, anti-template, dan penghapusan dump form 9-poin.
 2. **Data referensi & sales aid** — tabel tarif ongkir per provinsi (JNE JTR), penyempurnaan skema paket express + diskon volume, rule urgency closing, dan dokumentasi Deadline Lock + program kompensasi keterlambatan.
@@ -21,7 +21,7 @@ Total file yang dimodifikasi: **5 file inti** (`src/ai/prompt.js`, `src/handlers
 
 ---
 
-## 2. Tabel Ringkasan 15 Revisi
+## 2. Tabel Ringkasan 16 Revisi
 
 | # | Item | File Diubah | Status |
 |---|------|-------------|--------|
@@ -40,6 +40,7 @@ Total file yang dimodifikasi: **5 file inti** (`src/ai/prompt.js`, `src/handlers
 | 13 | Deadline Lock + Kompensasi Keterlambatan (jaminan + 4 tier kompensasi) | `knowledge-base.json`, `prompt.js` | ✅ Selesai |
 | 14 | Pattern Lab handler (penjelasan 4 pola + pancingan lihat gambar katalog) | `commandHandler.js`, `knowledge-base.json`, `prompt.js` | ✅ Selesai |
 | 15 | Contoh Jersey per Paket (link IG Standar/Classic/Pro + detection tier) | `commandHandler.js`, `knowledge-base.json`, `prompt.js` | ✅ Selesai |
+| 16 | Promo qty gate — AI hormati ketentuan minimum 12 pcs untuk promo bawaan | `prompt.js` | ✅ Selesai |
 
 ---
 
@@ -483,6 +484,57 @@ Bot:      Halo kak, mohon izin kami informasikan ya kak 🙏
 
 ---
 
+### 3.16 Promo Qty Gate (Hormati Minimum 12 pcs)
+
+**Masalah sebelumnya (live bug dari production chat):**
+- Customer kirim: *"Untuk futsal dan rencana mau order 9 pcs. Ada referensi design?"*
+- AI tetap reply dengan kalimat *"Berikut kak untuk promo bulan ini, mau pilih paket yang mana nih kak sebelum kehabisan 😁"* → trigger regex `/berikut.*(promo)/i` di `IMAGE_TRIGGERS` → bot otomatis kirim gambar promo paket.
+- Padahal promo paket bawaan Ayres ketentuannya **minimum 12 pcs** — customer 9 pcs belum eligible.
+- Customer follow-up: *"Jadi saya tidak dapat promonya?"* → AI ulang reply sama → bot kirim gambar promo lagi (loop).
+- Akar masalah: AI tidak melakukan **qty gate** sebelum tawarkan promo.
+
+**Perubahan:**
+
+Section baru di `src/ai/prompt.js`: **`=== ATURAN HANDLING PROMO BAWAAN (QTY GATE — WAJIB) ===`**
+
+**Rules:**
+- Promo bawaan (FREE 3D Logo, FREE Bola, FREE Upgrade Jacquard, FREE Jersey) = ketentuan keras min 12 pcs. **JANGAN diabaikan.**
+- KETIKA customer eksplisit sebut qty < 12 → AI **WAJIB**:
+  1. Inform jujur: customer belum eligible promo karena qty di bawah 12.
+  2. Tawarkan upgrade qty ke 12 pcs (jelaskan selisih konkret).
+  3. ATAU lanjut order tanpa promo + info bahwa 6-11 pcs tetap no tambahan biaya satuan.
+- KETIKA customer qty >= 12 → boleh tawarkan promo + arahkan ketik `promo`.
+- KETIKA customer tanya umum promo tanpa qty → jelaskan singkat ketentuan min 12 + tanya rencana qty.
+
+**LARANGAN KERAS:**
+- AI tidak boleh tulis frasa `berikut promo`, `berikut kak untuk promo`, `kirim promo dulu ya kak` kalau qty customer < 12. Frasa itu trigger `IMAGE_TRIGGERS` sistem → gambar promo auto-kirim → customer dapat info promo padahal belum eligible.
+- AI tidak boleh ulang reply yang sama kalau customer follow-up *"saya ga dapat promo?"* → wajib jawab konkret (qty < 12) + tawarkan solusi.
+- AI tidak boleh ngarang varian promo khusus qty < 12 yang tidak ada di KB.
+
+**Behavior baru expected:**
+
+```
+Customer: Untuk futsal dan rencana mau order 9 pcs. Ada referensi design?
+
+Bot:      Siap kak 😊 dicatat ya, jersey futsal 9 pcs.
+
+          Sebelumnya boleh saya info dulu kak: promo paket kami (FREE 3D Logo,
+          FREE Bola, dll) berlaku minimal 12 pcs ya. Karena pesanan kakak masih
+          9 pcs, jadi belum bisa pakai promo paket. Kalau berkenan menambah
+          3 pcs lagi (jadi 12 pcs), kakak langsung dapat benefit promo sesuai
+          paket pilihan 🙏
+
+          Soal referensi desain — boleh tahu kakak sudah ada konsep sendiri,
+          atau perlu rekomendasi pola dari kami? Kalau mau lihat pilihan pola
+          jersey kami, tinggal ketik *pattern lab* nanti saya kirimkan
+          penjelasan + gambarnya 😊
+
+          Kira-kira mau lanjut 9 pcs tanpa promo, atau tambahkan jadi 12 pcs
+          untuk dapat promo kak?
+```
+
+---
+
 ## 4. Diagram Flow
 
 ### 4.1 Routing Pesan Masuk (Top-Level)
@@ -809,7 +861,11 @@ Bot:      Untuk 50 pcs dengan deadline 1 minggu masuk ke Express 5 atau 7
 | `4c42567` | 26 Mei 2026 | Deadline Lock & Kompensasi Keterlambatan (revisi #13) + update laporan |
 | `95cc0bb` | 26 Mei 2026 | Pattern Lab handler (revisi #14) + update laporan |
 | `9565536` | 26 Mei 2026 | Perkuat rule KB coverage + closing question |
-| (HEAD baru) | 26 Mei 2026 | Contoh Jersey per Paket — link IG Standar/Classic/Pro (revisi #15) |
+| `77ca754` | 26 Mei 2026 | Contoh Jersey per Paket — link IG Standar/Classic/Pro (revisi #15) |
+| `230de4b` | 26 Mei 2026 | Fix: typo tolerance untuk tier detection contoh paket |
+| `738b590` | 26 Mei 2026 | Fix: greeting handler hijack pesan dengan substansi order |
+| `8cdfe93` | 26 Mei 2026 | Promo qty gate — AI hormati minimum 12 pcs (revisi #16) |
+| (HEAD baru) | 26 Mei 2026 | Update laporan dengan revisi #16 + commit refs |
 
 ---
 
