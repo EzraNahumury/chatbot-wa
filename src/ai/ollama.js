@@ -31,7 +31,7 @@ function releaseSemaphore() {
 
 // In-memory conversation history: phone -> messages[]
 const historyMap = new Map();
-const MAX_HISTORY = parseInt(process.env.MAX_HISTORY || "10");
+const MAX_HISTORY = parseInt(process.env.MAX_HISTORY || "40");
 
 function getHistory(phone) {
   return historyMap.get(phone) || [];

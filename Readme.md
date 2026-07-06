@@ -265,7 +265,7 @@ Beberapa detail penting:
 
 Ketika `commandHandler` mengembalikan `{ handled: false }`, `src/handlers/aiHandler.js` mengambil alih:
 
-1. **Bangun konteks** — `askAI()` di `src/ai/ollama.js` menyusun array pesan: `system prompt` (dari `buildSystemPrompt()`) + riwayat percakapan (`MAX_HISTORY` pesan terakhir, default 10) + pesan baru customer.
+1. **Bangun konteks** — `askAI()` di `src/ai/ollama.js` menyusun array pesan: `system prompt` (dari `buildSystemPrompt()`) + riwayat percakapan (`MAX_HISTORY` pesan terakhir, default 40) + pesan baru customer.
 2. **Panggil Ollama** — `POST {OLLAMA_HOST}/api/chat` dengan model `OLLAMA_MODEL` (default `gpt-oss:120b-cloud`), dibatasi oleh **semaphore** (`MAX_CONCURRENT_AI`, default 5 request paralel) dan **retry** otomatis (`AI_MAX_RETRIES`, default 2x, hanya untuk error 5xx/429) dengan backoff linear.
 3. **Timeout** (`AI_TIMEOUT`, default 25 detik) menghasilkan fallback pesan "sistem sedang sibuk" alih-alih error mentah ke customer.
 4. **Post-processing balasan AI** (di `aiHandler.js`), berjalan setiap kali AI membalas:
@@ -277,6 +277,7 @@ Ketika `commandHandler` mengembalikan `{ handled: false }`, `src/handlers/aiHand
 
 System prompt (`src/ai/prompt.js`) memberi persona **Nadia** dan berisi kebijakan bisnis sangat rinci, di antaranya:
 
+- **Larangan tanya ulang** — sebelum bertanya, AI wajib cek riwayat chat dulu; info yang sudah pernah disebutkan customer (qty, jenis olahraga, deadline, status desain, kota tujuan, dll) tidak boleh ditanya ulang. Ditambahkan untuk mengatasi bug AI kehilangan konteks pada percakapan panjang (lihat catatan `MAX_HISTORY` di bawah).
 - Wajib mengakhiri **setiap** balasan dengan satu pertanyaan konsultatif kontekstual (tidak boleh generik/berulang).
 - Aturan **qty gate promo** — promo bawaan (FREE 3D Logo, FREE Bola, dll) hanya berlaku ≥12 pcs; di bawah itu AI wajib jujur & menawarkan upgrade qty, dilarang keras memicu frasa yang otomatis mengirim gambar promo.
 - Aturan **ongkir** — selalu sertakan estimasi ongkir JNE JTR per provinsi + disclaimer wajib bahwa tarif final ditentukan CS Order.
@@ -426,7 +427,7 @@ Variabel yang **sudah ada** di `.env.example`:
 | `OLLAMA_KEY` | *(kosong)* | API key Ollama (dikirim sebagai Bearer token) |
 | `OLLAMA_MODEL` | `gpt-oss:120b-cloud` | Nama model yang dipanggil |
 | `AI_TIMEOUT` | `25000` (ms) | Timeout request ke Ollama sebelum fallback "sistem sibuk" |
-| `MAX_HISTORY` | `10` | Jumlah pesan riwayat percakapan yang dikirim sebagai konteks |
+| `MAX_HISTORY` | `40` | Jumlah pesan riwayat percakapan yang dikirim sebagai konteks (dinaikkan dari 10 → 40 karena alur konsultasi order sering >5 tukar pesan; window terlalu kecil menyebabkan AI "lupa" info yang sudah dijawab customer dan tanya ulang) |
 | `RATE_LIMIT_MAX` | `10` | Maksimum pesan per window per nomor |
 | `RATE_LIMIT_WINDOW` | `60000` (ms) | Ukuran window rate limit |
 | `REPLY_DELAY_MIN` / `REPLY_DELAY_MAX` | `800` / `2000` (ms) | Rentang delay acak sebelum bot membalas |
